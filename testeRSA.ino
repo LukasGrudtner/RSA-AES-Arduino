@@ -19,23 +19,17 @@ char  ReplyBuffer[38];//[] = "acknowledged";       // a string to send back
 char  temp[38];
 String replay;
 
-int DH = 1;
-int RSA = 2;
-
 int a = 2;
 int g = 23;
 int p = 86;
 
-boolean chaveRSArecebida = false;
-boolean chaveDHrecebida = false;
+boolean receivedRSAKey = false;
+boolean receivedDiffieHellmanKey = false;
 
 int my_pub = 9827;
 int my_priv = 3786;
 int java_pub;
 int iv = 8;
-
-int simpleKey;
-boolean keyExchange = false;
 
 // An EthernetUDP instance to let us send and receive packets over UDP
 EthernetUDP Udp;
@@ -49,172 +43,158 @@ void setup() {
   Serial.println("Start");
 }
 
-void loop() {
+void receivesRSAKey() {
+  int packetSize = Udp.parsePacket();
 
-  /* Envia chave pública RSA uma única vez. */
-  if (RSA) {
-    RSA--;
+  if (packetSize) {
+    Udp.read(packetBuffer, UDP_TX_PACKET_MAX_SIZE);
 
-    char rsabuf[32];
-    char ivbuf[8];
-
-    sprintf(rsabuf, "%i", my_pub);
-    sprintf(ivbuf, "%i", iv);
-
-    /* Concatena chave pública, # e iv em rsabuf. */
-    strcat(rsabuf, "#");
-    strcat(rsabuf, ivbuf);
-    
-    /* Realiza envio da chave. */
-    Udp.beginPacket(pc, localPort);
-    Udp.write(rsabuf);
-    Udp.endPacket();
-
-    Serial.println("*** Chave pública RSA enviada! ***");
-    Serial.print("Chave pública do cliente # iv: ");
-    Serial.println(rsabuf);
-    Serial.println("***********************************");
-
-    delay(3000);
-    
-  }
-
-  /* Recebe chave pública RSA uma única vez. */
-  if (!chaveRSArecebida) {
-    
-    int packetSize = Udp.parsePacket();
-
-    if (packetSize) {
-      Udp.read(packetBuffer, UDP_TX_PACKET_MAX_SIZE);
-
-      /* Remove chave pública do Servidor do buffer. */
-      int i = 0;
-      char java_pub_string[32];
-      while (packetBuffer[i] != '#') {
-        java_pub_string[i] = packetBuffer[i];
-        i++;
-      }
+    /* Remove chave pública do Servidor do buffer. */
+    int i = 0;
+    char java_pub_string[32];
+    while (packetBuffer[i] != '#') {
+      java_pub_string[i] = packetBuffer[i];
       i++;
-      java_pub = atoi(java_pub_string);
-      
-      /* Remove iv do buffer. */
-      int iv_recebido;
-      char iv_recebido_string[8];
-      int j = 0;
-      while (packetBuffer[i] != '\0') {
-        iv_recebido_string[j] = packetBuffer[i];
-        j++;
-        i++;
-      }
-      iv_recebido = atoi(iv_recebido_string);
-
-      Serial.println("*** Chave pública RSA recebida do Server! ***");
-      Serial.print("Chave pública do Server: ");
-      Serial.println(java_pub);
-      Serial.print("Iv: ");
-      Serial.println(iv_recebido);
-      Serial.println("**********************************************");
-
-      if ((iv_recebido-1) == iv)
-        Serial.println("O iv recebido está correto.");
-      else
-        Serial.println("O iv recebido está incorreto.");
-      
-      // clear the char arrays for the next receive packet and send
-      memset(ReplyBuffer, 0, sizeof(ReplyBuffer));
-      memset(packetBuffer, 0, sizeof(packetBuffer));
-
-      chaveRSArecebida = true;
-  
-      Serial.println("*** Troca de chaves RSA concluída! ***\n");
-      delay(3000);
     }
-  }
+    i++;
+    java_pub = atoi(java_pub_string);
+      
+    /* Remove iv do buffer. */
+    int iv_recebido;
+    char iv_recebido_string[8];
+    int j = 0;
+    while (packetBuffer[i] != '\0') {
+      iv_recebido_string[j] = packetBuffer[i];
+      j++;
+      i++;
+    }
+    iv_recebido = atoi(iv_recebido_string);
 
-  /* Faz a troca de chaves Diffie-Hellman uma única vez, sem criptografia. */
-  if (DH) {
-    DH--;
+    Serial.println("*** Chave pública RSA recebida do Server! ***");
+    Serial.print("Chave pública do Server: ");
+    Serial.println(java_pub);
+    Serial.print("Iv: ");
+    Serial.println(iv_recebido);
+    Serial.println("**********************************************");
 
-    /* Envio da primeira chave. */
-    int aux = (int) pow(g, a);
-    int envio = aux % p;
-    char bufP[10];
-    char bufG[10];
-    char bufIv[10];
-    char buf[32];
+    if ((iv_recebido-1) == iv)
+      Serial.println("O iv recebido está correto.");
+    else
+      Serial.println("O iv recebido está incorreto.");
+      
+    // clear the char arrays for the next receive packet and send
+    memset(ReplyBuffer, 0, sizeof(ReplyBuffer));
+    memset(packetBuffer, 0, sizeof(packetBuffer));
 
-    /* Passa os valores p, g e iv para string. */
-    sprintf(bufP, "%i", p);
-    sprintf(bufG, "%i", g);
-    sprintf(bufIv, "%i", iv);
-    
-    sprintf(buf, "%i", envio);
-
-    /* Concatena p, g e iv no buffer. */
-    strcat(buf, "#");
-    strcat(buf, bufP);
-    strcat(buf, "#");
-    strcat(buf, bufG);
-    strcat(buf, "#");
-    strcat(buf, bufIv);
-    
-    /* Realiza envio da chave. */
-    Udp.beginPacket(pc, localPort);
-    Udp.write(buf);
-    Udp.endPacket();
-
-    Serial.println("*** Chave Diffie-Hellman enviada! ***");
-    Serial.print("A: ");
-    Serial.println(envio);
-    Serial.print("p: ");
-    Serial.println(bufP);
-    Serial.print("g: ");
-    Serial.println(bufG);
-    Serial.print("iv: ");
-    Serial.println(bufIv);
-    Serial.println("*************************************");
-
+    receivedRSAKey = true;
+  
+    Serial.println("*** Troca de chaves RSA concluída! ***\n");
     delay(3000);
   }
+}
+
+void sendsRSAKey() {
+  char rsabuf[32];
+  char ivbuf[8];
+
+  sprintf(rsabuf, "%i", my_pub);
+  sprintf(ivbuf, "%i", iv);
+
+  /* Concatena chave pública, # e iv em rsabuf. */
+  strcat(rsabuf, "#");
+  strcat(rsabuf, ivbuf);
+    
+  /* Realiza envio da chave. */
+  Udp.beginPacket(pc, localPort);
+  Udp.write(rsabuf);
+  Udp.endPacket();
+
+  Serial.println("*** Chave pública RSA enviada! ***");
+  Serial.print("Chave pública do cliente # iv: ");
+  Serial.println(rsabuf);
+  Serial.println("***********************************");
+
+  delay(3000);
+}
+
+void sendsDiffieHellmanKey() {
+  /* Envio da primeira chave. */
+  int aux = (int) pow(g, a);
+  int envio = aux % p;
+  char bufP[10];
+  char bufG[10];
+  char bufIv[10];
+  char buf[32];
+
+  /* Passa os valores p, g e iv para string. */  
+  sprintf(bufP, "%i", p);
+  sprintf(bufG, "%i", g);
+  sprintf(bufIv, "%i", iv);
+    
+  sprintf(buf, "%i", envio);
+
+  /* Concatena p, g e iv no buffer. */
+  strcat(buf, "#");
+  strcat(buf, bufP);
+  strcat(buf, "#");
+  strcat(buf, bufG);
+  strcat(buf, "#");
+  strcat(buf, bufIv);
+    
+  /* Realiza envio da chave. */
+  Udp.beginPacket(pc, localPort);
+  Udp.write(buf);
+  Udp.endPacket();
+
+  Serial.println("*** Chave Diffie-Hellman enviada! ***");
+  Serial.print("A: ");
+  Serial.println(envio);
+  Serial.print("p: ");
+  Serial.println(bufP);
+  Serial.print("g: ");
+  Serial.println(bufG);
+  Serial.print("iv: ");
+  Serial.println(bufIv);
+  Serial.println("*************************************");
+
+  delay(3000);
+}
+
+void receivesDiffieHellmanKey() {
+  int packetSize = Udp.parsePacket();
+  /* Recebeu chave. */
+  if (packetSize) {
+    Udp.read(packetBuffer, UDP_TX_PACKET_MAX_SIZE);
   
-  if (!chaveDHrecebida) {
+    /* Recupera chave do Servidor do buffer. */
+    int value;
+    char valueBuff[32];
+    char valueBuf[32];
 
-    int packetSize = Udp.parsePacket();
-    /* Recebeu chave. */
-    if (packetSize) {
-      Udp.read(packetBuffer, UDP_TX_PACKET_MAX_SIZE);
-  
-      /* Recupera chave do Servidor do buffer. */
-      int value;
-      char valueBuff[32];
-      char valueBuf[32];
+    Serial.print("ValueBuf: ");
+    Serial.println(valueBuf);
 
-      Serial.print("ValueBuf: ");
-      Serial.println(valueBuf);
-
-      int i = 0;
-      while (packetBuffer[i] != '#') {
-        valueBuf[i] = packetBuffer[i];
-        i++;
-      }
+    int i = 0;
+    while (packetBuffer[i] != '#') {
+      valueBuf[i] = packetBuffer[i];
       i++;
+    }
+    i++;
 
-      
-      
-      value = atoi(valueBuf);
+    value = atoi(valueBuf);
 
-      Serial.print("Value: ");
-      Serial.println(value);
+    Serial.print("Value: ");
+    Serial.println(value);
 
-      int aux = (int) pow(value, a);
-      simpleKey = aux % p;
+    int aux = (int) pow(value, a);
+    simpleKey = aux % p;
       
-      /* Remove iv do buffer. */
-      int iv_recebido;
-      char iv_recebido_string[2];
-      int j = 0;
-      Serial.print("PACKET BUFFER: ");
-      Serial.println(packetBuffer);
+    /* Remove iv do buffer. */
+    int iv_recebido;
+    char iv_recebido_string[2];
+    int j = 0;
+    Serial.print("PACKET BUFFER: ");
+    Serial.println(packetBuffer);
 //      Serial.println(packetBuffer[i]);
       
 //      while (packetBuffer[i] != '\0') {
@@ -225,37 +205,53 @@ void loop() {
       
 //      iv_recebido = atoi(iv_recebido_string);
 //      iv_recebido = atoi(packetBuffer[i]);
-      iv_recebido = strtol(packetBuffer[i], (char **)NULL, 10);
+    iv_recebido = strtol(packetBuffer[i], (char **)NULL, 10);
 //      strtol(str, (char **)NULL, 10)
 
-      Serial.print("Packet buffer: ");
-      Serial.println(packetBuffer[i]);
+    Serial.print("Packet buffer: ");
+    Serial.println(packetBuffer[i]);
 
-      Serial.println("*** Chave Diffie-Hellman recebida! ***");
-      Serial.print("Simple key: ");
-      Serial.println(simpleKey);
-      Serial.print("iv: ");
-      Serial.println(iv_recebido);
-      Serial.println("**************************************");
+    Serial.println("*** Chave Diffie-Hellman recebida! ***");
+    Serial.print("Simple key: ");
+    Serial.println(simpleKey);
+    Serial.print("iv: ");
+    Serial.println(iv_recebido);
+    Serial.println("**************************************");
 
-      if ((iv_recebido-1) == iv)
-        Serial.print("O iv recebido está correto.");
-      else
-        Serial.println("O iv recebido está incorreto.");
+    if ((iv_recebido-1) == iv)
+      Serial.print("O iv recebido está correto.");
+    else
+      Serial.println("O iv recebido está incorreto.");
       
-      // clear the char arrays for the next receive packet and send
-      memset(ReplyBuffer, 0, sizeof(ReplyBuffer));
-      memset(packetBuffer, 0, sizeof(packetBuffer));
+    // clear the char arrays for the next receive packet and send
+    memset(ReplyBuffer, 0, sizeof(ReplyBuffer));
+    memset(packetBuffer, 0, sizeof(packetBuffer));
 
-      chaveDHrecebida = true;
+    receivedDiffieHellmanKey = true;
   
-      Serial.println("*** Troca de chaves Diffie-Hellman finalizada! ***");
-      delay(3000);
-    }
+    Serial.println("*** Troca de chaves Diffie-Hellman finalizada! ***");
+    delay(3000);
+  }
+}
+
+
+
+void loop() {
+
+  /* Realiza a troca de chaves RSA. */
+  if (!receivedRSAKey) {
+    sendsRSAKey();
+    receivesRSAKey();
   }
 
-  /* Com as chaves trocadas: */
-  if (chaveDHrecebida && !chaveDHrecebida) {
+  /* Realiza a troca de chaves Diffie-Hellman sem criptogragia. */
+  if (!receivedDiffieHellmanKey) {
+    sendsDiffieHellmanKey();
+    receivesDiffieHellmanKey();
+  }
+  
+  /* Com as chaves trocadas, inicia a troca de dados. */
+  if (receivedRSAKey && receivedDiffieHellmanKey) {
     uint8_t key[16];
     uint8_t iv[16];
     int j;
@@ -315,6 +311,10 @@ void loop() {
     Serial.print("*******************************************************");
     delay(5000);
   }
+
+  
+
+  
 
 }
 
